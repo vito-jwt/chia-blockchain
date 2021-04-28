@@ -3,7 +3,8 @@ import dataclasses
 import logging
 import math
 import random
-from concurrent.futures.process import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor
+from chia.util.single_thread_executor import SingleThreadExecutor
 from typing import Dict, List, Optional, Tuple
 
 from chia.consensus.block_header_validation import validate_finished_header_block
@@ -585,7 +586,8 @@ class WeightProofHandler:
             log.error("failed weight proof sub epoch sample validation")
             return False, uint32(0)
 
-        executor = ProcessPoolExecutor(1)
+        executor = SingleThreadExecutor()
+        #executor = ProcessPoolExecutor(1)
         constants, summary_bytes, wp_segment_bytes, wp_recent_chain_bytes = vars_to_bytes(
             self.constants, summaries, weight_proof
         )

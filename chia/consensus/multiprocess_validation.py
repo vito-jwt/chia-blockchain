@@ -1,7 +1,7 @@
 import asyncio
 import logging
 import traceback
-from concurrent.futures.process import ProcessPoolExecutor
+from concurrent.futures import Executor
 from dataclasses import dataclass
 from typing import Dict, List, Optional, Sequence, Tuple, Union, Callable
 
@@ -127,7 +127,7 @@ async def pre_validate_blocks_multiprocessing(
     constants_json: Dict,
     block_records: BlockchainInterface,
     blocks: Sequence[Union[FullBlock, HeaderBlock]],
-    pool: ProcessPoolExecutor,
+    pool: Executor,
     check_filter: bool,
     npc_results: Dict[uint32, NPCResult],
     get_block_generator: Optional[Callable],

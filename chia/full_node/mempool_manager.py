@@ -3,7 +3,8 @@ import collections
 import dataclasses
 import logging
 import time
-from concurrent.futures.process import ProcessPoolExecutor
+from concurrent.futures import Executor, ProcessPoolExecutor
+from chia.util.single_thread_executor import SingleThreadExecutor
 from typing import Dict, List, Optional, Set, Tuple
 from blspy import AugSchemeMPL, G1Element
 from chiabip158 import PyBIP158
@@ -61,7 +62,9 @@ class MempoolManager:
         self.potential_cache_max_total_cost = int(self.constants.MAX_BLOCK_COST_CLVM * 5)
         self.potential_cache_cost: int = 0
         self.seen_cache_size = 10000
-        self.pool = ProcessPoolExecutor(max_workers=1)
+
+        self.pool = SingleThreadExecutor()
+#        self.pool = ProcessPoolExecutor(max_workers=1)
 
         # The mempool will correspond to a certain peak
         self.peak: Optional[BlockRecord] = None

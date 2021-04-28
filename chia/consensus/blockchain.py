@@ -2,7 +2,8 @@ import asyncio
 import dataclasses
 import logging
 import multiprocessing
-from concurrent.futures.process import ProcessPoolExecutor
+from concurrent.futures import Executor, ProcessPoolExecutor
+from chia.util.single_thread_executor import SingleThreadExecutor
 from enum import Enum
 from typing import Dict, List, Optional, Set, Tuple, Union
 
@@ -73,7 +74,7 @@ class Blockchain(BlockchainInterface):
     # Store
     block_store: BlockStore
     # Used to verify blocks in parallel
-    pool: ProcessPoolExecutor
+    pool: Executor
     # Set holding seen compact proofs, in order to avoid duplicates.
     _seen_compact_proofs: Set[Tuple[VDFInfo, uint32]]
 
@@ -100,7 +101,8 @@ class Blockchain(BlockchainInterface):
         if cpu_count > 61:
             cpu_count = 61  # Windows Server 2016 has an issue https://bugs.python.org/issue26903
         num_workers = max(cpu_count - 2, 1)
-        self.pool = ProcessPoolExecutor(max_workers=num_workers)
+        self.pool = SingleThreadExecutor()
+#        self.pool = ProcessPoolExecutor(max_workers=num_workers)
         log.info(f"Started {num_workers} processes for block validation")
 
         self.constants = consensus_constants
