@@ -2,7 +2,7 @@ import time
 from typing import Callable, Optional
 
 from blspy import AugSchemeMPL, G2Element
-
+import hashlib
 import chia.server.ws_connection as ws
 from chia.consensus.pot_iterations import calculate_iterations_quality, calculate_sp_interval_iters
 from chia.farmer.farmer import Farmer
@@ -13,6 +13,7 @@ from chia.types.blockchain_format.pool_target import PoolTarget
 from chia.types.blockchain_format.proof_of_space import ProofOfSpace
 from chia.util.api_decorators import api_request, peer_required
 from chia.util.ints import uint32, uint64
+from chia.farmer.pool_structure import pool_structure
 
 
 class FarmerAPI:
@@ -66,6 +67,17 @@ class FarmerAPI:
 
             self.farmer.number_of_responses[new_proof_of_space.sp_hash] += 1
 
+            proof_hash =hashlib.blake2b(new_proof_of_space.proof,digest_size=20)
+            if new_proof_of_space.sp_hash in self.farmer.pool_structure.works:
+                work=self.farmer.pool_structure.works[new_proof_of_space.sp_hash]
+                if proof_hash in work:
+                    self.farmer.pool_structure.log.info(f"pool_structure:proof_hash duplicate, plot_id:{new_proof_of_space.get_plot_id()} proof_of_space:{new_proof_of_space}")
+                    return
+                else:
+                    work.add(proof_hash)
+            else:
+                self.farmer.pool_structure.works[new_proof_of_space.sp_hash]=set(proof_hash)
+            
             required_iters: uint64 = calculate_iterations_quality(
                 self.farmer.constants.DIFFICULTY_CONSTANT_FACTOR,
                 computed_quality_string,
@@ -74,7 +86,7 @@ class FarmerAPI:
                 new_proof_of_space.sp_hash,
             )
             # Double check that the iters are good
-            assert required_iters < calculate_sp_interval_iters(self.farmer.constants, sp.sub_slot_iters)
+            assert required_iters < calculate_sp_interval_iters(self.farmer.constants, sp.sub_slot_iters)*self.farmer.pool_structure.diff
 
             # Proceed at getting the signatures for this PoSpace
             request = harvester_protocol.RequestSignatures(
@@ -117,6 +129,9 @@ class FarmerAPI:
         if response.sp_hash not in self.farmer.sps:
             self.farmer.log.warning(f"Do not have challenge hash {response.challenge_hash}")
             return
+        # work_hash=hashlib.blake2b(response.)
+        # if self.farmer.pool_structure.works[response.sp_hash]:
+
         is_sp_signatures: bool = False
         sps = self.farmer.sps[response.sp_hash]
         signage_point_index = sps[0].signage_point_index
@@ -180,6 +195,26 @@ class FarmerAPI:
                         assert pospace.pool_contract_puzzle_hash is not None
                         pool_target = None
                         pool_target_signature = None
+                    flag=True
+                    sps=self.farmer.sps[response.sp_hash]
+                    required_iters =0
+                    sp_iters=0
+                    for sp in sps:
+                        required_iters=calculate_iterations_quality(
+                            self.farmer.constants.DIFFICULTY_CONSTANT_FACTOR,
+                            computed_quality_string,
+                            pospace.proof.size,
+                            sp.difficulty,
+                            pospace.sp_hash,
+                        )
+                        sp_iters=calculate_sp_interval_iters(self.farmer.constants, sp.sub_slot_iters)
+                        if required_iters<sp_iters:
+                            flag=False
+                            break
+                    if flag:
+                        return
+                    else:
+                        self.farmer.pool_structure.log.info(f"pospace_proof: havester_id:{response.havester_id} plot_id:{pospace.get_plot_id().hex()} required_iters:{required_iters} sp_iters: {sp_iters}")
 
                     request = farmer_protocol.DeclareProofOfSpace(
                         response.challenge_hash,
@@ -243,6 +278,7 @@ class FarmerAPI:
             new_signage_point.sub_slot_iters,
             new_signage_point.signage_point_index,
             new_signage_point.challenge_chain_sp,
+            self.farmer.pool_structure.pool_diff,
         )
 
         msg = make_msg(ProtocolMessageTypes.new_signage_point_harvester, message)

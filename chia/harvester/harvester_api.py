@@ -76,7 +76,7 @@ class HarvesterAPI:
 
         loop = asyncio.get_running_loop()
 
-        def blocking_lookup(filename: Path, plot_info: PlotInfo) -> List[Tuple[bytes32, ProofOfSpace]]:
+        def blocking_lookup(filename: Path, plot_info: PlotInfo,pool_diff:uint64) -> Tuple[List[Tuple[bytes32, ProofOfSpace]],List[bool]]:
             # Uses the DiskProver object to lookup qualities. This is a blocking call,
             # so it should be run in a thread pool.
             try:
@@ -97,6 +97,7 @@ class HarvesterAPI:
                     return []
 
                 responses: List[Tuple[bytes32, ProofOfSpace]] = []
+                flags=[]
                 if quality_strings is not None:
                     # Found proofs of space (on average 1 is expected per plot)
                     for index, quality_str in enumerate(quality_strings):
@@ -110,7 +111,10 @@ class HarvesterAPI:
                         sp_interval_iters = calculate_sp_interval_iters(
                             self.harvester.constants, new_challenge.sub_slot_iters
                         )
-                        if required_iters < sp_interval_iters:
+                        flag=False
+                        if required_iters < sp_interval_iters*pool_diff:
+                            if required_iters < sp_interval_iters:
+                                flag=True
                             # Found a very good proof of space! will fetch the whole proof from disk,
                             # then send to farmer
                             try:
@@ -146,20 +150,21 @@ class HarvesterAPI:
                                     ),
                                 )
                             )
-                return responses
+                            flags.append(flag)
+                return responses,flags
             except Exception as e:
                 self.harvester.log.error(f"Unknown error: {e}")
-                return []
+                return [],[]
 
         async def lookup_challenge(
-            filename: Path, plot_info: PlotInfo
-        ) -> Tuple[Path, List[harvester_protocol.NewProofOfSpace]]:
+            filename: Path, plot_info: PlotInfo,pool_diff:uint64
+        ) -> Tuple[Tuple[Path, List[harvester_protocol.NewProofOfSpace]],List[bool]]:
             # Executes a DiskProverLookup in a thread pool, and returns responses
             all_responses: List[harvester_protocol.NewProofOfSpace] = []
             if self.harvester._is_shutdown:
                 return filename, []
-            proofs_of_space_and_q: List[Tuple[bytes32, ProofOfSpace]] = await loop.run_in_executor(
-                self.harvester.executor, blocking_lookup, filename, plot_info
+            (proofs_of_space_and_q,flags) = await loop.run_in_executor(
+                self.harvester.executor, blocking_lookup, filename, plot_info,pool_diff
             )
             for quality_str, proof_of_space in proofs_of_space_and_q:
                 all_responses.append(
@@ -171,11 +176,12 @@ class HarvesterAPI:
                         new_challenge.signage_point_index,
                     )
                 )
-            return filename, all_responses
+            return (filename, all_responses),flags
 
         awaitables = []
         passed = 0
         total = 0
+        t_flags=[]
         for try_plot_filename, try_plot_info in self.harvester.provers.items():
             try:
                 if try_plot_filename.exists():
@@ -189,12 +195,15 @@ class HarvesterAPI:
                         new_challenge.sp_hash,
                     ):
                         passed += 1
-                        awaitables.append(lookup_challenge(try_plot_filename, try_plot_info))
+                        results=lookup_challenge(try_plot_filename, try_plot_info,new_challenge.pool_diff)
+                        awaitables.append(results[0])
+                        t_flags.append(results[1])
             except Exception as e:
                 self.harvester.log.error(f"Error plot file {try_plot_filename} may no longer exist {e}")
 
         # Concurrently executes all lookups on disk, to take advantage of multiple disk parallelism
         total_proofs_found = 0
+        j=0
         for filename_sublist_awaitable in asyncio.as_completed(awaitables):
             filename, sublist = await filename_sublist_awaitable
             time_taken = time.time() - start
@@ -207,11 +216,16 @@ class HarvesterAPI:
                 pass
                 # If you want additional logs, uncomment the following line
                 # self.harvester.log.debug(f"Looking up qualities on {filename} took: {time.time() - start}")
+            flags=t_flags[j]
+            j+=1
+            i=0
             for response in sublist:
-                total_proofs_found += 1
+                if flags[i]:
+                    total_proofs_found += 1
+                i+=1
                 msg = make_msg(ProtocolMessageTypes.new_proof_of_space, response)
                 await peer.send_message(msg)
-
+            
         now = uint64(int(time.time()))
         farming_info = FarmingInfo(
             new_challenge.challenge_hash,
@@ -267,6 +281,7 @@ class HarvesterAPI:
             local_sk.get_g1(),
             farmer_public_key,
             message_signatures,
+            self.harvester.harvester_id,
         )
 
         return make_msg(ProtocolMessageTypes.respond_signatures, response)

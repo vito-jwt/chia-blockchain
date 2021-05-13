@@ -20,6 +20,7 @@ from chia.util.config import load_config, save_config
 from chia.util.ints import uint32, uint64
 from chia.util.keychain import Keychain
 from chia.wallet.derive_keys import master_sk_to_farmer_sk, master_sk_to_pool_sk, master_sk_to_wallet_sk
+from chia.farmer.pool_structure import pool_harvester,pool_structure,pool_plot
 
 log = logging.getLogger(__name__)
 
@@ -82,6 +83,7 @@ class Farmer:
         self.pool_target_encoded = pool_config["xch_target_address"]
         self.pool_target = decode_puzzle_hash(self.pool_target_encoded)
         self.pool_sks_map: Dict = {}
+        self.pool_structue=pool_structure(self.config["pool_diff"])
         for key in self.get_private_keys():
             self.pool_sks_map[bytes(key.get_g1())] = key
 
@@ -179,6 +181,7 @@ class Farmer:
                         self.proofs_of_space.pop(key, None)
                         self.quality_str_to_identifiers.pop(key, None)
                         self.number_of_responses.pop(key, None)
+                        del self.pool_structue.works[key]
                         removed_keys.append(key)
                 for key in removed_keys:
                     self.cache_add_time.pop(key, None)
