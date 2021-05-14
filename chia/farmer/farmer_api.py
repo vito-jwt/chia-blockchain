@@ -231,7 +231,7 @@ class FarmerAPI:
                             if required_iters<sp_iters:
                                 flag=False
                                 break
-                    self.farmer.pool_structure.log.info(f"EVENT:pool_pospace_proof havester_id:{response.havester_id} plot_id:{pospace.get_plot_id().hex()} thash: {get_power_coefficient(pospace.proof.size)}")
+                    self.farmer.pool_structure.log.info(f"EVENT:pool_pospace_proof havester_id:{response.harvester_id} plot_id:{pospace.get_plot_id().hex()} thash: {get_power_coefficient(pospace.proof.size)}")
                     if flag:
                         return
                     request = farmer_protocol.DeclareProofOfSpace(
