@@ -112,7 +112,7 @@ class HarvesterAPI:
                             self.harvester.constants, new_challenge.sub_slot_iters
                         )
                         flag=False
-                        if required_iters < sp_interval_iters*pool_diff:
+                        if pool_diff<=0 or required_iters < sp_interval_iters*pool_diff:
                             if required_iters < sp_interval_iters:
                                 flag=True
                             # Found a very good proof of space! will fetch the whole proof from disk,

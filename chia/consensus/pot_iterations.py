@@ -63,3 +63,6 @@ def calculate_iterations_quality(
         // (int(pow(2, 256)) * int(_expected_plot_size(size)))
     )
     return max(iters, uint64(1))
+
+def get_power_coefficient(size):
+    return int(_expected_plot_size(size))
