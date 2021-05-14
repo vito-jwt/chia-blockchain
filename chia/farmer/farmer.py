@@ -83,7 +83,7 @@ class Farmer:
         self.pool_target_encoded = pool_config["xch_target_address"]
         self.pool_target = decode_puzzle_hash(self.pool_target_encoded)
         self.pool_sks_map: Dict = {}
-        self.pool_structue=pool_structure(self.config["pool_diff"])
+        self.pool_structure=pool_structure(self.config.get("pool_diff",0))
         for key in self.get_private_keys():
             self.pool_sks_map[bytes(key.get_g1())] = key
 
@@ -181,7 +181,9 @@ class Farmer:
                         self.proofs_of_space.pop(key, None)
                         self.quality_str_to_identifiers.pop(key, None)
                         self.number_of_responses.pop(key, None)
-                        del self.pool_structue.works[key]
+                        log.info(f"ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss1{len(self.pool_structure.works)}")
+                        del self.pool_structure.works[key]
+                        log.info(f"ssssssssssssssssssssssssssssssssssssssssssssssssssssssssssss2{len(self.pool_structure.works)}")
                         removed_keys.append(key)
                 for key in removed_keys:
                     self.cache_add_time.pop(key, None)

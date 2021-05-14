@@ -67,7 +67,7 @@ class FarmerAPI:
 
             self.farmer.number_of_responses[new_proof_of_space.sp_hash] += 1
 
-            proof_hash =hashlib.blake2b(new_proof_of_space.proof,digest_size=20).hexdigest()
+            proof_hash =hashlib.blake2b(new_proof_of_space.proof.proof,digest_size=20).hexdigest()
             if new_proof_of_space.sp_hash in self.farmer.pool_structure.works:
                 work=self.farmer.pool_structure.works[new_proof_of_space.sp_hash]
                 if proof_hash in work:
@@ -77,7 +77,6 @@ class FarmerAPI:
                     work[proof_hash]=(sp.difficulty,sp.sub_slot_iters)
             else:
                 self.farmer.pool_structure.works[new_proof_of_space.sp_hash]={proof_hash:(sp.difficulty,sp.sub_slot_iters)}
-            
             required_iters: uint64 = calculate_iterations_quality(
                 self.farmer.constants.DIFFICULTY_CONSTANT_FACTOR,
                 computed_quality_string,
@@ -86,9 +85,9 @@ class FarmerAPI:
                 new_proof_of_space.sp_hash,
             )
             # Double check that the iters are good
-            if self.farmer.pool_structure.diff>0:
-                assert required_iters < calculate_sp_interval_iters(self.farmer.constants, sp.sub_slot_iters)*self.farmer.pool_structure.diff
-
+            if self.farmer.pool_structure.pool_diff>0:
+                assert required_iters < calculate_sp_interval_iters(self.farmer.constants, sp.sub_slot_iters)*self.farmer.pool_structure.pool_diff
+            
             # Proceed at getting the signatures for this PoSpace
             request = harvester_protocol.RequestSignatures(
                 new_proof_of_space.plot_identifier,
@@ -154,10 +153,11 @@ class FarmerAPI:
         computed_quality_string = pospace.verify_and_get_quality_string(
             self.farmer.constants, response.challenge_hash, response.sp_hash
         )
+        
         if computed_quality_string is None:
             self.farmer.log.warning(f"Have invalid PoSpace {pospace}")
             return
-
+    
         if is_sp_signatures:
             (
                 challenge_chain_sp,
@@ -197,35 +197,35 @@ class FarmerAPI:
                         pool_target = None
                         pool_target_signature = None
                     flag=True
-                    sps=self.farmer.sps[response.sp_hash]
                     required_iters =0
                     sp_iters=0
                     sub_slot_iters=0
                     difficulty=0
-                    if pospace.sp_hash in self.farmer.pool_structure.works:
+                    if response.sp_hash in self.farmer.pool_structure.works:
                         proof_hash =hashlib.blake2b(pospace.proof,digest_size=20).hexdigest()
-                        work=self.farmer.pool_structure.works[pospace.sp_hash]
+                        work=self.farmer.pool_structure.works[response.sp_hash]
                         if proof_hash in work:
                             (difficulty,sub_slot_iters)=work[proof_hash]
                     if difficulty>0:
                         required_iters=calculate_iterations_quality(
                             self.farmer.constants.DIFFICULTY_CONSTANT_FACTOR,
                             computed_quality_string,
-                            pospace.proof.size,
+                            pospace.size,
                             difficulty,
-                            pospace.sp_hash,
+                            response.sp_hash,
                         )
                         sp_iters=calculate_sp_interval_iters(self.farmer.constants, sub_slot_iters)
                         if required_iters<sp_iters:
                             flag=False
                     else:
+                        sps=self.farmer.sps[response.sp_hash]
                         for sp in sps:
                             required_iters=calculate_iterations_quality(
                                 self.farmer.constants.DIFFICULTY_CONSTANT_FACTOR,
                                 computed_quality_string,
-                                pospace.proof.size,
+                                pospace.size,
                                 sp.difficulty,
-                                pospace.sp_hash,
+                                response.sp_hash,
                             )
                             sp_iters=calculate_sp_interval_iters(self.farmer.constants, sp.sub_slot_iters)
                             if required_iters<sp_iters:

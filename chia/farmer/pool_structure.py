@@ -4,7 +4,7 @@ class pool_structure:
     def __init__(self,diff):
         self.harvesters:dict={}
         self.works={}
-        self.diff=diff
+        self.pool_diff=diff
         self.log=log
     
 class pool_harvester:

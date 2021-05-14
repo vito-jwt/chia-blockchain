@@ -54,7 +54,7 @@ class Harvester:
         self.state_changed_callback: Optional[Callable] = None
         self.last_load_time: float = 0
         self.plot_load_frequency = config.get("plot_loading_frequency_seconds", 120)
-        self.harvester_id=config["harvester_id"]
+        self.harvester_id = config.get("harvester_id","test01")
 
     async def _start(self):
         self._refresh_lock = asyncio.Lock()

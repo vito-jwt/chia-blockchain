@@ -157,12 +157,12 @@ class HarvesterAPI:
                 return [],[]
 
         async def lookup_challenge(
-            filename: Path, plot_info: PlotInfo,pool_diff:uint64
-        ) -> Tuple[Tuple[Path, List[harvester_protocol.NewProofOfSpace]],List[bool]]:
+            filename: Path, plot_info: PlotInfo,pool_diff: uint64
+        ) -> Tuple[Path, List[harvester_protocol.NewProofOfSpace],List[bool]]:
             # Executes a DiskProverLookup in a thread pool, and returns responses
             all_responses: List[harvester_protocol.NewProofOfSpace] = []
             if self.harvester._is_shutdown:
-                return filename, []
+                return (filename, [],[])
             (proofs_of_space_and_q,flags) = await loop.run_in_executor(
                 self.harvester.executor, blocking_lookup, filename, plot_info,pool_diff
             )
@@ -176,7 +176,7 @@ class HarvesterAPI:
                         new_challenge.signage_point_index,
                     )
                 )
-            return (filename, all_responses),flags
+            return filename, all_responses,flags
 
         awaitables = []
         passed = 0
@@ -195,17 +195,18 @@ class HarvesterAPI:
                         new_challenge.sp_hash,
                     ):
                         passed += 1
-                        results=lookup_challenge(try_plot_filename, try_plot_info,new_challenge.pool_diff)
-                        awaitables.append(results[0])
-                        t_flags.append(results[1])
+                        awaitables.append(lookup_challenge(try_plot_filename, try_plot_info,new_challenge.pool_diff))
+                        
             except Exception as e:
                 self.harvester.log.error(f"Error plot file {try_plot_filename} may no longer exist {e}")
 
         # Concurrently executes all lookups on disk, to take advantage of multiple disk parallelism
         total_proofs_found = 0
-        j=0
         for filename_sublist_awaitable in asyncio.as_completed(awaitables):
-            filename, sublist = await filename_sublist_awaitable
+            rz=await filename_sublist_awaitable
+            filename= rz[0]
+            sublist = rz[1]
+
             time_taken = time.time() - start
             if time_taken > 5:
                 self.harvester.log.warning(
@@ -216,8 +217,7 @@ class HarvesterAPI:
                 pass
                 # If you want additional logs, uncomment the following line
                 # self.harvester.log.debug(f"Looking up qualities on {filename} took: {time.time() - start}")
-            flags=t_flags[j]
-            j+=1
+            flags=rz[2]
             i=0
             for response in sublist:
                 if flags[i]:
